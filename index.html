@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1b1526">
+<link rel="icon" href="data:,">
+<title>Critter Battle Tower 3D: Heart Mob Climb!</title>
+<style>
+  /* ---------- base: full-bleed canvas, no scrolling, no selection ---------- */
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #1b1526;
+    touch-action: none; user-select: none; -webkit-user-select: none; overscroll-behavior: none; }
+  #c { position: fixed; left: 0; top: 0; width: 100%; height: 100%; display: block; outline: none; }
+  .hidden { display: none !important; }
+  img { image-rendering: pixelated; image-rendering: crisp-edges; -webkit-user-drag: none; pointer-events: none; }
+
+  /* ---------- Minecraft-style stone buttons (icon only, >= 80 CSS px) ---------- */
+  .btn { position: relative; width: 84px; height: 84px; padding: 0; margin: 0; cursor: pointer;
+    border: 3px solid #141414; border-radius: 4px; background: #7b7b7b;
+    box-shadow: inset 5px 5px 0 #b8b8b8, inset -5px -5px 0 #474747, 0 4px 0 rgba(0,0,0,.45);
+    display: flex; align-items: center; justify-content: center; gap: 2px; touch-action: manipulation;
+    pointer-events: auto; transition: transform .08s; }
+  .btn:active, .btn.pressed { transform: translateY(3px);
+    box-shadow: inset 5px 5px 0 #4a4a4a, inset -5px -5px 0 #a5a5a5, 0 1px 0 rgba(0,0,0,.45); }
+  .btn img { width: 60%; height: 60%; }
+  .btn.green { background: #5d9c35; box-shadow: inset 5px 5px 0 #8fd25c, inset -5px -5px 0 #33611b, 0 4px 0 rgba(0,0,0,.45); }
+
+  /* ---------- in-game HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+  #hud-tl { position: absolute; left: max(12px, env(safe-area-inset-left)); top: max(10px, env(safe-area-inset-top));
+    display: flex; flex-direction: column; gap: 4px; }
+  #hearts { display: flex; gap: 2px; }
+  #hearts img { width: 34px; height: 34px; transition: transform .15s; }
+  #hearts img.lost { transform: scale(.85); opacity: .9; }
+  #hearts img.bump { animation: bump .35s; }
+  #gems { display: flex; flex-wrap: wrap; gap: 2px; max-width: 190px; min-height: 22px; }
+  #gems img { width: 22px; height: 22px; animation: popin .3s; }
+
+  #hud-tc { position: absolute; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px;
+    background: rgba(18, 14, 28, .55); border: 2px solid rgba(0,0,0,.5); }
+  #tower { display: flex; flex-direction: column-reverse; gap: 2px; align-items: center; }
+  #tower .seg { width: 26px; height: 9px; background: #5b5b5b; border: 1px solid #1d1d1d; }
+  #tower .seg.done { background: #74b84a; }
+  #tower .seg.cur { background: #ffcf4a; box-shadow: 0 0 8px 2px #ffb43a; animation: glow .7s infinite alternate; }
+  #tower .cap { width: 30px; height: 6px; background: repeating-linear-gradient(90deg, #6d6d6d 0 6px, transparent 6px 12px); }
+  #pips { display: flex; flex-wrap: wrap; gap: 3px; max-width: 280px; justify-content: center; }
+  .pip { position: relative; width: 28px; height: 28px; }
+  .pip img.face { width: 100%; height: 100%; filter: grayscale(1) brightness(.55); border: 2px solid #222; }
+  .pip img.mini { position: absolute; right: -5px; top: -6px; width: 15px; height: 15px; display: none; }
+  .pip.friend img.face { filter: none; border-color: #ff6f9c; }
+  .pip.friend img.mini { display: block; }
+  .pip.friend { animation: popin .35s; }
+
+  #hud-tr { position: absolute; right: max(12px, env(safe-area-inset-right)); top: max(10px, env(safe-area-inset-top));
+    display: flex; gap: 10px; }
+  #hud-bottom { position: absolute; right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom));
+    display: flex; align-items: center; gap: 10px; }
+  #xpbar { width: min(40vw, 460px); height: 20px; padding: 2px; display: flex; gap: 2px;
+    background: #121212; border: 2px solid #000; box-shadow: 0 0 0 2px rgba(255,255,255,.12); }
+  #xpbar .xs { flex: 1; background: #263619; }
+  #xpbar .xs.on { background: linear-gradient(#c9ff6b, #6fd12a 55%, #3f8f16); }
+  #xpbar.full .xs.on { animation: xpglow .5s infinite alternate; }
+  #btn-bomb { width: 104px; height: 104px; filter: grayscale(.9) brightness(.7); }
+  #btn-bomb img { width: 72%; height: 72%; }
+  #btn-bomb.ready { filter: none; background: #c9406a; animation: pulse .6s infinite alternate;
+    box-shadow: inset 5px 5px 0 #ff8fb0, inset -5px -5px 0 #7d1d3c, 0 0 26px 8px rgba(255, 92, 150, .85); }
+
+  /* ---------- hints (zero text, never clickable) ---------- */
+  #hints { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .hint { position: absolute; left: 0; top: 0; width: 76px; height: 76px; margin: -76px 0 0 -38px;
+    filter: drop-shadow(0 3px 0 rgba(0,0,0,.55)); }
+  #hint-hand { animation: tapbob .8s infinite ease-in-out; }
+  #hint-drag { animation: dragloop 1.9s infinite ease-in-out; }
+  #hint-arrow { width: 64px; height: 64px; margin: -64px 0 0 -32px; animation: arrowbob .6s infinite alternate ease-in-out; }
+  #hint-gift { animation: tapbob .8s infinite ease-in-out; }
+
+  /* ---------- floor-clear stars ---------- */
+  #clearstars { position: fixed; left: 50%; top: 21%; transform: translate(-50%, -50%); display: flex; gap: 14px; pointer-events: none; }
+  #clearstars img { width: 88px; height: 88px; opacity: 0; }
+  #clearstars.show img { opacity: 1; }
+  #clearstars.out { opacity: 0; }
+
+  /* ---------- title ---------- */
+  #title { position: fixed; inset: 0; pointer-events: none; }
+  #title-btns { position: absolute; display: flex; align-items: center; gap: 22px; }
+  #btn-play { width: 150px; height: 150px; }
+  #btn-play img { width: 46%; height: 46%; }
+  #btn-play img.heart { position: absolute; width: 92%; height: 92%; opacity: .95; }
+  #btn-play img.tri { position: relative; width: 44%; height: 44%; margin-left: 8px; }
+  #btn-play { animation: breathe 1.4s infinite ease-in-out; }
+  #btn-restart { width: 96px; height: 96px; }
+  #btn-restart img { width: 48%; height: 48%; }
+  #btn-sound2 { position: absolute; right: max(12px, env(safe-area-inset-right)); top: max(10px, env(safe-area-inset-top)); }
+
+  /* ---------- end card (beside / below the finale so the dancing crowd stays visible) ---------- */
+  #endcard { position: fixed; inset: 0; display: flex; align-items: center; justify-content: flex-end; padding-right: 3vw; pointer-events: none; }
+  #endpanel { pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 18px 22px;
+    background: #c6c6c6; border: 4px solid #1a1a1a; border-radius: 6px;
+    box-shadow: inset 5px 5px 0 #fff, inset -5px -5px 0 #555, 0 10px 30px rgba(0,0,0,.6); animation: popin .5s; max-height: 96vh; }
+  #endrow { display: flex; align-items: center; gap: 22px; }
+  #endtower { display: flex; flex-direction: column-reverse; align-items: center; gap: 3px; padding: 6px 8px;
+    background: #6f6f6f; border: 3px solid #2b2b2b; }
+  #endtower .row { display: flex; gap: 2px; align-items: center; }
+  #endtower .row img { width: 22px; height: 22px; }
+  #endtower .crown { width: 100%; height: 8px; background: repeating-linear-gradient(90deg, #5a5a5a 0 8px, transparent 8px 16px); }
+  #endstats { display: flex; flex-direction: column; gap: 10px; }
+  .stat { display: flex; align-items: center; gap: 8px; }
+  .stat > img { width: 42px; height: 42px; }
+  .statpips { display: flex; gap: 3px; align-items: center; padding: 4px 6px; background: #6f6f6f; border: 3px solid #2b2b2b; }
+  .statpips img { width: 18px; height: 18px; }
+  .statpips img.dim { opacity: 0.25; filter: grayscale(1) brightness(0.4); }
+  #endbtns { display: flex; gap: 22px; }
+  #endbtns .btn { width: 96px; height: 96px; }
+
+  #fade { position: fixed; inset: 0; background: #0c0912; opacity: 0; pointer-events: none; transition: opacity .35s; }
+  #fade.on { opacity: 1; }
+
+  @keyframes glow { from { filter: brightness(1); } to { filter: brightness(1.35); } }
+  @keyframes xpglow { from { filter: brightness(1); } to { filter: brightness(1.45); } }
+  @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.07); } }
+  @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+  @keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.4); } 100% { transform: scale(1); } }
+  @keyframes popin { from { transform: scale(.96); } 70% { transform: scale(1.04); } to { transform: scale(1); } }
+  @keyframes starpop { from { opacity: 0; transform: scale(.1) rotate(-40deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
+  @keyframes tapbob { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(12px) scale(.9); } }
+  @keyframes arrowbob { from { transform: translateY(-6px); } to { transform: translateY(10px); } }
+  @keyframes dragloop { 0% { transform: translate(-60px, 10px) scale(.95); opacity: 0; }
+    12% { opacity: 1; } 55% { transform: translate(60px, -14px) scale(.95); opacity: 1; }
+    70% { transform: translate(60px, -14px) scale(1.05); opacity: 0; } 100% { transform: translate(-60px, 10px); opacity: 0; } }
+
+  /* ---------- responsive: portrait phones ---------- */
+  @media (max-aspect-ratio: 4/5) {
+    #hearts img { width: 28px; height: 28px; }
+    #gems { max-width: 166px; }
+    #hud-tc { top: calc(max(10px, env(safe-area-inset-top)) + 92px); }
+    #pips { max-width: 290px; }
+    .pip { width: 26px; height: 26px; }
+    #xpbar { width: calc(100vw - 150px); }
+    #title-btns { left: 50%; bottom: 7%; transform: translateX(-50%); }
+    #endcard { align-items: flex-end; justify-content: center; padding: 0 0 3vh 0; }
+    #endpanel { padding: 14px 14px; max-width: calc(100vw - 12px); }
+    #endrow { gap: 14px; }
+    .statpips img { width: 16px; height: 16px; }
+  }
+  /* landscape / desktop: buttons sit right of the tower */
+  @media (min-aspect-ratio: 4/5) {
+    #title-btns { right: 7%; top: 50%; transform: translateY(-50%); flex-direction: column; }
+  }
+  /* ---------- responsive: short landscape phones ---------- */
+  @media (max-height: 520px) and (min-aspect-ratio: 4/5) {
+    #hearts img { width: 26px; height: 26px; }
+    #gems img { width: 18px; height: 18px; }
+    #hud-tc { padding: 4px 8px; gap: 6px; }
+    #tower { flex-direction: row; }
+    #tower .seg { width: 12px; height: 12px; }
+    #tower .cap { display: none; }
+    .pip { width: 22px; height: 22px; }
+    #pips { max-width: 230px; }
+    #xpbar { width: 30vw; height: 16px; }
+    #btn-bomb { width: 96px; height: 96px; }
+    #btn-play { width: 124px; height: 124px; }
+    #btn-restart { width: 88px; height: 88px; }
+    #title-btns { right: 5%; top: 60%; transform: translateY(-50%); flex-direction: row; gap: 16px; }
+    .stat { font-size: 26px; } .stat > img { width: 34px; height: 34px; }
+    #endtower .row img { width: 15px; height: 15px; }
+    #endbtns .btn { width: 84px; height: 84px; }
+    #endpanel { padding: 10px 16px; gap: 8px; }
+  }
+</style>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+<script>
+  // collects runtime errors for automated QA (read window.__errors); never shown to the player
+  window.__errors = [];
+  window.addEventListener('error', function (e) { window.__errors.push(String((e && (e.message || (e.target && e.target.src))) || e)); }, true);
+  window.addEventListener('unhandledrejection', function (e) { window.__errors.push('rejection: ' + String(e && e.reason)); });
+</script>
+</head>
+<body>
+<canvas id="c" aria-label="Critter Battle Tower game"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="hud-tl"><div id="hearts"></div><div id="gems"></div></div>
+  <div id="hud-tc"><div id="tower"></div><div id="pips"></div></div>
+  <div id="hud-tr">
+    <button id="btn-sound" class="btn" aria-label="sound"><img alt=""></button>
+    <button id="btn-home" class="btn" aria-label="home"><img alt=""></button>
+  </div>
+  <div id="hud-bottom">
+    <div id="xpbar"></div>
+    <button id="btn-bomb" class="btn" aria-label="heart bomb"><img alt=""></button>
+  </div>
+</div>
+
+<div id="hints">
+  <img id="hint-hand" class="hint hidden" alt="">
+  <img id="hint-drag" class="hint hidden" alt="">
+  <img id="hint-arrow" class="hint hidden" alt="">
+  <img id="hint-gift" class="hint hidden" alt="">
+</div>
+
+<div id="clearstars" class="hidden"><img alt=""><img alt=""><img alt=""></div>
+
+<div id="title" class="hidden">
+  <div id="title-btns">
+    <button id="btn-play" class="btn green" aria-label="play"><img class="heart" alt=""><img class="tri" alt=""></button>
+    <button id="btn-restart" class="btn" aria-label="start from the bottom"><img class="r" alt=""><img class="t" alt=""></button>
+  </div>
+  <button id="btn-sound2" class="btn" aria-label="sound"><img alt=""></button>
+</div>
+
+<div id="endcard" class="hidden">
+  <div id="endpanel">
+    <div id="endrow">
+      <div id="endtower"></div>
+      <div id="endstats">
+        <div class="stat"><img id="st-friend-img" alt=""><div class="statpips" id="st-friends"></div></div>
+        <div class="stat"><img id="st-dia-img" alt=""><div class="statpips" id="st-dia"></div></div>
+        <div class="stat"><img id="st-em-img" alt=""><div class="statpips" id="st-em"></div></div>
+        <div class="stat" id="st-trophy-row"><img id="st-trophy-img" alt=""></div>
+      </div>
+    </div>
+    <div id="endbtns">
+      <button id="btn-replay" class="btn green" aria-label="play again"><img alt=""></button>
+      <button id="btn-home2" class="btn" aria-label="home"><img alt=""></button>
+    </div>
+  </div>
+</div>
+
+<div id="fade"></div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
