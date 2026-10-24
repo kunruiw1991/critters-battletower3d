@@ -67,8 +67,24 @@ export function createUI(G) {
 
   // ---------- buttons ----------
   function bind(b, fn) {
+    let lastFire = 0;
+    const fire = (e) => {
+      if (e) {
+        e.stopPropagation();
+        if (e.type === 'touchend') e.preventDefault();
+      }
+      const now = performance.now();
+      if (now - lastFire < 280) return;
+      lastFire = now;
+      G.audio.unlock();
+      G.audio.play('uiTap');
+      fn();
+    };
     b.addEventListener('pointerdown', (e) => { e.stopPropagation(); G.audio.unlock(); });
-    b.addEventListener('click', (e) => { e.stopPropagation(); G.audio.unlock(); G.audio.play('uiTap'); fn(); });
+    b.addEventListener('touchstart', (e) => { e.stopPropagation(); G.audio.unlock(); }, { passive: true });
+    b.addEventListener('pointerup', (e) => { if (e.button === undefined || e.button === 0) fire(e); });
+    b.addEventListener('touchend', fire, { passive: false });
+    b.addEventListener('click', fire);
   }
   bind(el.bomb, () => G.game.heartBomb());
   bind(el.sound, toggleSound);

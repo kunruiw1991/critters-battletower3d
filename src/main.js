@@ -3,7 +3,7 @@
 //   real:     './textures.js'                './models.js'                './audio.js'
 //   fallback: './stubs/textures_stub.js'     './stubs/models_stub.js'     './stubs/audio_stub.js'
 // Swapping between them = change the three import lines below.
-import * as THREE from 'three';
+import * as THREE from '../vendor/three.module.min.js';
 import { createTextures } from './textures.js';
 import { createModelKit } from './models.js';
 import { GameAudio } from './audio.js';
@@ -23,7 +23,12 @@ import { createUI } from './ui.js';
 import { loadSave, writeSave } from './save.js';
 
 const canvas = document.getElementById('c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+} catch (e) {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+}
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
@@ -121,10 +126,6 @@ function flickerTorches() {
   }
 }
 
-// keep one rig of every kind alive (hidden) so all shader programs compile at boot
-const warm = new THREE.Group(); warm.visible = false; scene.add(warm);
-for (const k of MOB_KINDS) { const r = G.kit.makeMob(k); r.setFriend(true); warm.add(r.root); }
-
 // ---------- loop ----------
 function physics(dt) {
   G.heroSys.step(dt);
@@ -182,6 +183,7 @@ function resize() {
 window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', () => setTimeout(resize, 150));
 document.addEventListener('pointerdown', () => GameAudio.unlock(), true);
+document.addEventListener('touchstart', () => GameAudio.unlock(), { capture: true, passive: true });
 document.addEventListener('keydown', () => GameAudio.unlock(), true);
 document.addEventListener('visibilitychange', () => { last = performance.now(); });
 
@@ -274,6 +276,4 @@ window.__game = {
 resize();
 G.game.goTitle();
 G.cam.update(0);
-if (G.kit.precompile) { try { G.kit.precompile(renderer, scene, camera); } catch (e) { /* optional helper */ } }
-renderer.compile(scene, camera);
 G.rafId = requestAnimationFrame(frame);

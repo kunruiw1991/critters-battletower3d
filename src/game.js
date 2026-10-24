@@ -35,7 +35,7 @@ export function createGame(G) {
     i = clamp(i | 0, 0, ROOF);
     teardown();
     G.world.resetForRun();
-    G.rng.reseed(opts.seed ?? (1234 + i * 101));
+    G.rng.reseed(opts.seed !== undefined && opts.seed !== null ? opts.seed : (1234 + i * 101));
     const save = G.save;
     if (opts.fresh) { save.unlocked = 0; save.friendKinds = []; writeSave(save); }
     G.run = { friends: 0, friendKinds: [], initialFriendsCount: 0, waiting: [], xp: 0, poofs: 0, chests: 0, heartHits: 0, loveGiven: 0, trophy: false,

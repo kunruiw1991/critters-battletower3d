@@ -44,36 +44,96 @@ export function createInput(G) {
     return out;
   }
 
-  // ---------------- pointer ----------------
-  el.addEventListener('pointerdown', (e) => {
-    G.audio.unlock();
-    if (st.down) return;
-    st.down = true; st.id = e.pointerId;
-    st.sx = st.x0 = e.clientX; st.sy = st.y0 = e.clientY; st.t0 = performance.now(); st.moved = 0;
+  // ---------------- pointer + touch (iPad Safari safe) ----------------
+  let secId = -1, secX0 = 0, secY0 = 0, secT0 = 0;
+  function beginPrimary(id, cx, cy) {
+    st.down = true; st.id = id;
+    st.sx = st.x0 = cx; st.sy = st.y0 = cy; st.t0 = performance.now(); st.moved = 0;
     st.holding = false; st.holdValid = false;
     st.downOnTarget = !!(G.screen === 'play' && G.fs && (
       pickGrumpy(st.x0, st.y0) ||
       hitHint('hint-gift', st.x0, st.y0, 18) ||
       hitHint('hint-arrow', st.x0, st.y0, 18)
     ));
+  }
+  function movePrimary(cx, cy) {
+    st.sx = cx; st.sy = cy;
+    st.moved = Math.max(st.moved, Math.hypot(st.sx - st.x0, st.sy - st.y0));
+  }
+  function endPrimary(isTapCandidate) {
+    const dt = performance.now() - st.t0;
+    const tapMs = st.downOnTarget ? 450 : TAP_MS;
+    const tapPx = st.downOnTarget ? 28 : TAP_PX;
+    const tx = st.sx, ty = st.sy, moved = st.moved;
+    st.down = false; st.holding = false; st.holdValid = false; st.downOnTarget = false;
+    if (isTapCandidate && dt < tapMs && moved < tapPx) tap(tx, ty);
+  }
+  el.addEventListener('pointerdown', (e) => {
+    G.audio.unlock();
+    if (st.down && e.pointerId !== st.id) {
+      // Allow a second finger on iPad to tap-throw while the first finger holds to walk
+      secId = e.pointerId; secX0 = e.clientX; secY0 = e.clientY; secT0 = performance.now();
+      e.preventDefault();
+      return;
+    }
+    beginPrimary(e.pointerId, e.clientX, e.clientY);
     try { el.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
     e.preventDefault();
   });
   window.addEventListener('pointermove', (e) => {
     if (!st.down || e.pointerId !== st.id) return;
-    st.sx = e.clientX; st.sy = e.clientY;
-    st.moved = Math.max(st.moved, Math.hypot(st.sx - st.x0, st.sy - st.y0));
+    movePrimary(e.clientX, e.clientY);
   });
   const up = (e) => {
+    if (e.pointerId === secId) {
+      const dt = performance.now() - secT0;
+      const moved = Math.hypot(e.clientX - secX0, e.clientY - secY0);
+      secId = -1;
+      if (e.type === 'pointerup' && dt < TAP_MS && moved < TAP_PX) tap(e.clientX, e.clientY);
+      return;
+    }
     if (!st.down || e.pointerId !== st.id) return;
-    const dt = performance.now() - st.t0;
-    const tapMs = st.downOnTarget ? 450 : TAP_MS;
-    const tapPx = st.downOnTarget ? 28 : TAP_PX;
-    st.down = false; st.holding = false; st.holdValid = false; st.downOnTarget = false;
-    if (e.type === 'pointerup' && dt < tapMs && st.moved < tapPx) tap(st.sx, st.sy);
+    endPrimary(e.type === 'pointerup');
   };
   window.addEventListener('pointerup', up);
   window.addEventListener('pointercancel', up);
+  if (!window.PointerEvent) {
+    el.addEventListener('touchstart', (e) => {
+      G.audio.unlock();
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      if (!st.down || (e.touches && e.touches.length === 1)) {
+        beginPrimary(t.identifier, t.clientX, t.clientY);
+      } else {
+        secId = t.identifier; secX0 = t.clientX; secY0 = t.clientY; secT0 = performance.now();
+      }
+      e.preventDefault();
+    }, { passive: false });
+    window.addEventListener('touchmove', (e) => {
+      if (!st.down || !e.changedTouches) return;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === st.id) { movePrimary(t.clientX, t.clientY); break; }
+      }
+    }, { passive: true });
+    const touchUp = (e) => {
+      if (!e.changedTouches) return;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === secId) {
+          const dt = performance.now() - secT0;
+          const moved = Math.hypot(t.clientX - secX0, t.clientY - secY0);
+          secId = -1;
+          if (e.type === 'touchend' && dt < TAP_MS && moved < TAP_PX) tap(t.clientX, t.clientY);
+        } else if (st.down && t.identifier === st.id) {
+          movePrimary(t.clientX, t.clientY);
+          endPrimary(e.type === 'touchend');
+        }
+      }
+    };
+    window.addEventListener('touchend', touchUp, { passive: true });
+    window.addEventListener('touchcancel', touchUp, { passive: true });
+  }
   el.addEventListener('contextmenu', (e) => e.preventDefault());
 
   // ---------------- keyboard ----------------

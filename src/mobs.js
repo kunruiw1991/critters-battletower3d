@@ -35,7 +35,7 @@ export function createMobSystem(G) {
       id: nextId++, kind, def, rig, holder, removed: false, hidden: false,
       x, z, y: 0, vy: 0, vx: 0, vz: 0, dvx: 0, dvz: 0, kx: 0, kz: 0, jx: 0, jz: 0,
       cx: x, cy: 1, cz: z,
-      facing: opts.facing ?? 0, look: 0, lx: 0, lz: 0,
+      facing: opts.facing !== undefined && opts.facing !== null ? opts.facing : 0, look: 0, lx: 0, lz: 0,
       radius: rig.radius || def.radius, height: rig.height || def.height,
       love: 0, loveNeeded: def.love, isFriend: false, friend: false,
       state: 'pop', stateT: 0, t: G.rng() * 10, cd: 1 + G.rng() * 1.2,
@@ -56,7 +56,7 @@ export function createMobSystem(G) {
     }
     if (opts.wall) {
       m.wall = { side: opts.wall.side, u: opts.wall.u, h: opts.wall.h, off: 0, phase: 'crawl',
-        dir: G.rng() < 0.5 ? -1 : 1, top: opts.wall.h, dropT: opts.wall.dropT ?? 2.5 };
+        dir: G.rng() < 0.5 ? -1 : 1, top: opts.wall.h, dropT: opts.wall.dropT !== undefined && opts.wall.dropT !== null ? opts.wall.dropT : 2.5 };
       m.state = 'wall';
       wallPos(m);
     }
